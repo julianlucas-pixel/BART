@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>BART Music Experiment</title>
+  <script src="https://unpkg.com/jspsych@7.3.3"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-html-button-response@1.2.0"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@1.2.0"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-survey-html-form@1.2.0"></script>
+  <style>
+    body { font-family: Arial, sans-serif; }
+    .youtube-embed { position: fixed; top: 10px; right: 10px; width: 300px; height: 170px; z-index: 1000; }
+    #jspsych-content { margin-top: 200px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div id="youtube-container" class="youtube-embed hidden"></div>
+  <div id="jspsych"></div>
+  <script>
+    const YOUTUBE_60BPM = "bZ1KF4cZmek";
+    const YOUTUBE_120BPM = "2Hb97dyS8to";
+    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxJ9Fiai5aHXy3o04Y93xop3o_g8bIUN3NiO_e7QZn2kyeTxVioFobbdx5Vv_kcRCKvuQ/exec";
+
+    function getYoutubeEmbedHTML(videoId) {
+      return `<iframe width="300" height="170" src="https://www.youtube.com/embed/${videoId}?autoplay=1&controls=0&loop=1&playlist=${videoId}" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+    }
+    function randomGroupAssignment(participantID) {
+      return Math.random() < 0.5 ? "60BPM" : "120BPM";
+    }
+    let participantID = null;
+    let assignedGroup = null;
+
+    const timeline = [];
+    timeline.push({
+      type: jsPsychSurveyHtmlForm,
+      preamble: `<h2>Welcome to the BART Music Experiment</h2>
+      <p>Please enter your participant ID (e.g., 001):</p>`,
+      html: `<input type="text" name="participantID" pattern="\\d{3,}" required style="font-size:1.2em;" autofocus>`,
+      button_label: "Begin",
+      on_finish: function(data){
+        participantID = JSON.parse(data.response).participantID;
+        assignedGroup = randomGroupAssignment(participantID);
+        document.getElementById('youtube-container').innerHTML = getYoutubeEmbedHTML(assignedGroup === "60BPM" ? YOUTUBE_60BPM : YOUTUBE_120BPM);
+        document.getElementById('youtube-container').classList.remove('hidden');
+      }
+    });
+
+    timeline.push({
+      type: jsPsychHtmlButtonResponse,
+      stimulus: `<h3>Instructions</h3>
+        <p>During this task, you will see a balloon. Click "Pump" to inflate the balloon and earn points.<br>
+        Each pump gives you points, but if the balloon pops, you lose points for that trial.<br>
+        You can choose to "Collect" your points at any time before the balloon pops.<br>
+        <b>Music will play in the corner throughout the experiment.</b></p>
+        <p>Click "Continue" to begin.</p>`,
+      choices: ['Continue']
+    });
+
+    timeline.push({
+      type: jsPsychHtmlButtonResponse,
+      stimulus: `<div id="balloon" style="width:80px;height:80px;background:#F77;border-radius:50%;margin:auto;margin-bottom:30px;"></div>
+            <div><b>Trial 1 of 20</b></div>
+            <div id="pump-count">Pumps: 0</div>
+            <div id="trial-points">Points: 0</div>`,
+      choices: ['Pump', 'Collect']
+    });
+
+    timeline.push({
+      type: jsPsychHtmlKeyboardResponse,
+      stimulus: `<div id="balloon" style="width:80px;height:80px;background:#F77;border-radius:50%;margin:auto;margin-bottom:30px;"></div>
+            <div><b>Trial 1 of 20</b></div>
+            <div id="pump-count">Pumps: 0</div>
+            <div id="trial-points">Points: 0</div>
+            <p>Press "P" to Pump, "C" to Collect.</p>`,
+      choices: ['p', 'c']
+    });
+
+    timeline.push({
+      type: jsPsychHtmlButtonResponse,
+      stimulus: `<h3>Task Complete!</h3>
+      <p>Thank you for participating.<br>Your results will be automatically saved.</p>`,
+      choices: ['Finish'],
+      on_finish: function(){
+        document.getElementById('youtube-container').classList.add('hidden');
+      }
+    });
+
+    const jsPsych = initJsPsych({
+      on_finish: function() {
+        let expData = jsPsych.data.get().csv();
+        fetch(GOOGLE_SCRIPT_URL, {
+          method: "POST",
+          body: JSON.stringify({
+            participantID: participantID,
+            group: assignedGroup,
+            data: expData
+          }),
+          headers: {"Content-Type": "application/json"}
+        }).then(r => {
+          alert("Your data was saved. You may close this window.");
+        }).catch(e => {
+          alert("Error saving data! Please contact the study administrator.");
+        });
+      }
+    });
+    jsPsych.run(timeline);
+  </script>
+</body>
+</html>
